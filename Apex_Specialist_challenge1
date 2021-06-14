@@ -1,0 +1,81 @@
+public with sharing class MaintenanceRequestHelper {
+    
+    public static void updateWorkOrders(list<case> triggercase) {
+        // TODO: Complete the method to update workorders
+        // 
+        //New maintainance request will be stored in the below list.
+        list<case> insertnewcase = new list<case>(); 
+        //new equipment maintainance item will be stored in the below list
+		list<Equipment_Maintenance_Item__c> insertnewitem = new list<Equipment_Maintenance_Item__c>(); 
+        
+        //Select query to fetch all existing equipment_maintenance_item__c records
+		list<Equipment_Maintenance_Item__c> existingitem = ([select id,Maintenance_Request__c,Quantity__c,Equipment__c 
+                                                             from Equipment_Maintenance_Item__c]);
+        
+        //Below map will call getduedate method - this method will calculate minimum maintaince_cycle__c value 
+        //for a particular maintainance request
+        map<string,integer> duedateval = getduedate(triggercase);
+        
+        //Looping all cases available in trigger.new list
+        for(case c:triggercase)
+        if(c.status=='closed' && (c.type=='Repair' || c.type=='Routine Maintainance'))
+        {
+            //creating New Case
+            case newcase = new case();
+            newcase.subject = 'Schdule Routine Maintainance';
+            newcase.productID = c.productID;
+            newcase.Vehicle__c = c.Vehicle__c;
+            newcase.Date_Reported__c=Date.today();
+            newcase.Origin='web';
+            newcase.Type='Routine Maintenance';
+            newcase.Date_Due__c = date.today()+ duedateval.get(c.id);
+            newcase.ContactId = c.contactid;
+            insertnewcase.add(newcase); 
+            
+            //creating New Equipment_Maintenance_Item__c
+ 			for (Equipment_Maintenance_Item__c i : existingitem)
+			   if(c.id == i.Maintenance_Request__c)
+			   {
+			     Equipment_Maintenance_Item__c newitemlist = new Equipment_Maintenance_Item__c();
+                 newitemlist.Quantity__c = i.Quantity__c;
+				 newitemlist.Maintenance_Request__c = c.id; //currently mapped with old maintainance_request__c  
+				 newitemlist.Equipment__c = i.Equipment__c;
+				 insertnewitem.add(newitemlist);
+			   }
+			
+        }
+             insert insertnewcase; //inserted new maintainance request
+			
+			 //looping again to update maintainance_request__c with id of newly inserted maintainance request
+			 for (case c1 : insertnewcase)
+			  for (Equipment_Maintenance_Item__c x : insertnewitem)
+			  {
+			    x.Maintenance_Request__c = c1.id;
+		      }
+			  
+			  insert insertnewitem; //inserting maintainancr request
+			 
+			 
+    }
+    
+    //method to calculate min(maintenance_cycle__c)
+    public static map<string,integer> getduedate(list<case> fetch)
+    {
+        map<string,integer> mapexpdays = new map<string,integer>();
+        map<string,case> mapcaseid = new map<string,case>(fetch);
+        list<aggregateresult> alldue = [select Maintenance_Request__r.id cID,min(Equipment__r.Maintenance_Cycle__c)cycle 
+                                 from Equipment_Maintenance_Item__c 
+                                 where Maintenance_Request__r.id in :mapcaseid.keySet()
+                                 group by Maintenance_Request__r.id];
+        for (AggregateResult x:alldue )
+        {
+            integer adddays = Integer.valueOf(x.get('cycle'));
+            mapexpdays.put((string)x.get('cID'),adddays);
+        }
+        return mapexpdays;              
+    }
+}    
+    
+    
+       
+        
