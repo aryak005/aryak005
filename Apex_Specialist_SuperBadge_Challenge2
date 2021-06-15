@@ -1,0 +1,51 @@
+public with sharing class WarehouseCalloutService implements queueable{
+
+    private static final String WAREHOUSE_URL = 'https://th-superbadge-apex.herokuapp.com/equipment';
+     
+    @future(callout=true)
+    public static void getupdatedqty()
+    {
+        http h = new http();
+        httprequest req = new httprequest();
+        req.setMethod('GET');
+        req.setendpoint(WAREHOUSE_URL);        
+        httpresponse res = h.send(req);
+        
+        system.debug('http response '+res);
+        string body = res.getBody();
+        system.debug('body '+body);
+        
+        //list<string> jsn = (list<string>)system.json.deseralize(body,list<string>.class);
+        if(res.getStatusCode() == 200)
+        {
+        list<Object> results = (list<Object>) JSON.deserializeUntyped(res.getBody());
+        system.debug('deserialized output '+results);
+        list<product2> addext = new list<product2>();
+                
+        for(object o:results)
+        {           
+            map<string,object> productmap = (map<string,object>) o;
+            system.debug('iterate'+productmap); 
+            product2 inveqp = new product2();
+            inveqp.Lifespan_Months__c = (integer)productmap.get('lifespan');
+            inveqp.Warehouse_SKU__c = (string)productmap.get('sku');
+            inveqp.Replacement_Part__c = (boolean)productmap.get('replacement');
+            inveqp.name = (string)productmap.get('name');
+            inveqp.Cost__c = (integer)productmap.get('cost');
+            inveqp.Maintenance_Cycle__c = (integer)productmap.get('maintenanceperiod');
+            inveqp.Current_Inventory__c = (integer)productmap.get('quantity');
+            inveqp.productcode = (string)productmap.get('_id');
+            addext.add(inveqp);
+        }
+        
+        if(addext.size() > 0)
+        upsert addext Warehouse_SKU__c;
+        }
+    }
+    
+    public void execute (queueablecontext qc )
+    {
+        warehousecalloutservice.getupdatedqty();
+    }
+    
+}
