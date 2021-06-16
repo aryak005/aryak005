@@ -1,0 +1,9 @@
+public with sharing class WarehouseSyncSchedule implements schedulable{
+    // implement scheduled code here
+    public void execute (schedulablecontext sc)
+    {
+        system.enqueuejob(new warehousecalloutservice());
+    }
+    
+
+}
